@@ -64,7 +64,7 @@
                     </p>
                 </div>
 
-                <div id="camera-overview-latest-snapshot" class="relative mt-6 max-w-3xl">
+                <div id="camera-overview-latest-snapshot" class="relative mt-6 max-w-md">
                     @if ($latestSnapshotUrl)
                         <a href="{{ $latestSnapshotUrl }}" target="_blank" rel="noreferrer" class="block overflow-hidden rounded-lg border border-white/10 bg-white/10">
                             <img src="{{ $latestSnapshotUrl }}" alt="Latest screenshot from {{ optional($latestEmailSnapshot->received_at)->format('d M Y H:i') ?? $camera->name }}" class="aspect-video w-full object-cover">
