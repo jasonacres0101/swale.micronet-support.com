@@ -14,9 +14,9 @@ use stdClass;
 
 class IngestCameraEmailSnapshots extends Command
 {
-    protected $signature = 'cameras:ingest-email-snapshots {--limit=50 : Maximum unseen messages to process}';
+    protected $signature = 'cameras:ingest-email-snapshots {--limit=50 : Maximum messages to process}';
 
-    protected $description = 'Read camera snapshot emails from an IMAP mailbox and match them to cameras by sender serial number.';
+    protected $description = 'Read camera snapshot emails from an IMAP or POP3 mailbox and match them to cameras by sender serial number.';
 
     public function handle(): int
     {
@@ -24,6 +24,10 @@ class IngestCameraEmailSnapshots extends Command
             $this->components->info('Camera email ingest is disabled.');
 
             return self::SUCCESS;
+        }
+
+        if (config('camera_email.protocol') === 'pop3') {
+            return $this->handlePop3();
         }
 
         if (! function_exists('imap_open')) {
@@ -60,6 +64,141 @@ class IngestCameraEmailSnapshots extends Command
         $this->components->info('Camera email ingest complete.');
 
         return self::SUCCESS;
+    }
+
+    private function handlePop3(): int
+    {
+        $socket = $this->pop3Connect();
+
+        if (! is_resource($socket)) {
+            return self::FAILURE;
+        }
+
+        try {
+            $this->pop3Command($socket, 'USER '.config('camera_email.username'));
+            $this->pop3Command($socket, 'PASS '.config('camera_email.password'));
+            $uidLines = $this->pop3Multiline($socket, 'UIDL');
+            $limit = max(1, (int) $this->option('limit'));
+
+            foreach (array_slice($uidLines, 0, $limit) as $line) {
+                if (! preg_match('/^(\d+)\s+(.+)$/', $line, $matches)) {
+                    continue;
+                }
+
+                $messageNumber = (int) $matches[1];
+                $uid = trim($matches[2]);
+                $messageUid = sha1($this->pop3MailboxId().'|'.$uid);
+
+                if (CameraEmailSnapshot::query()->where('message_uid', $messageUid)->exists()) {
+                    continue;
+                }
+
+                $rawMessage = implode("\r\n", $this->pop3Multiline($socket, 'RETR '.$messageNumber));
+                $this->importRawMessage($messageUid, $rawMessage);
+
+                if (config('camera_email.delete_after_import')) {
+                    $this->pop3Command($socket, 'DELE '.$messageNumber);
+                }
+            }
+
+            $this->pop3Command($socket, 'QUIT');
+        } catch (\Throwable $exception) {
+            fclose($socket);
+            $this->components->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
+
+        $this->components->info('Camera POP3 email ingest complete.');
+
+        return self::SUCCESS;
+    }
+
+    private function pop3Connect()
+    {
+        $transport = match (strtolower((string) config('camera_email.encryption'))) {
+            'ssl' => 'ssl',
+            'tls' => 'tcp',
+            default => 'tcp',
+        };
+
+        $context = stream_context_create([
+            'ssl' => [
+                'verify_peer' => (bool) config('camera_email.validate_cert'),
+                'verify_peer_name' => (bool) config('camera_email.validate_cert'),
+            ],
+        ]);
+
+        $socket = @stream_socket_client(
+            $transport.'://'.config('camera_email.host').':'.config('camera_email.port'),
+            $errorCode,
+            $errorMessage,
+            20,
+            STREAM_CLIENT_CONNECT,
+            $context
+        );
+
+        if (! is_resource($socket)) {
+            $this->components->error("Unable to connect to POP3 mailbox: {$errorMessage} ({$errorCode})");
+
+            return null;
+        }
+
+        stream_set_timeout($socket, 20);
+        $this->pop3ReadResponse($socket);
+
+        if (strtolower((string) config('camera_email.encryption')) === 'tls') {
+            $this->pop3Command($socket, 'STLS');
+            stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+        }
+
+        return $socket;
+    }
+
+    private function pop3MailboxId(): string
+    {
+        return implode('|', [
+            'pop3',
+            config('camera_email.host'),
+            config('camera_email.port'),
+            config('camera_email.username'),
+        ]);
+    }
+
+    private function pop3Command($socket, string $command): string
+    {
+        fwrite($socket, $command."\r\n");
+
+        return $this->pop3ReadResponse($socket);
+    }
+
+    private function pop3ReadResponse($socket): string
+    {
+        $line = fgets($socket);
+
+        if ($line === false || ! str_starts_with($line, '+OK')) {
+            throw new \RuntimeException('POP3 server rejected command: '.trim((string) $line));
+        }
+
+        return rtrim($line, "\r\n");
+    }
+
+    private function pop3Multiline($socket, string $command): array
+    {
+        $this->pop3Command($socket, $command);
+        $lines = [];
+
+        while (($line = fgets($socket)) !== false) {
+            $line = rtrim($line, "\r\n");
+
+            if ($line === '.') {
+                break;
+            }
+
+            $lines[] = str_starts_with($line, '..') ? substr($line, 1) : $line;
+        }
+
+        return $lines;
     }
 
     private function mailboxString(): string
@@ -137,6 +276,205 @@ class IngestCameraEmailSnapshots extends Command
         }
 
         $this->markMessageHandled($connection, $messageNumber);
+    }
+
+    private function importRawMessage(string $messageUid, string $rawMessage): void
+    {
+        $parsed = $this->parseRawEmail($rawMessage);
+        $from = $this->parseAddressHeader($parsed['headers']['from'] ?? '');
+        $fromEmail = $from['email'];
+        $fromName = $from['name'];
+        $textBody = $this->rawTextBody($parsed);
+        $serialNumber = $this->serialFromEmail($fromEmail, $fromName) ?: $this->serialFromBody($textBody);
+        $normalizedSerial = Camera::normalizeSerialNumber($serialNumber);
+        $camera = $normalizedSerial
+            ? Camera::query()->where('serial_number_normalized', $normalizedSerial)->first()
+            : null;
+        $attachment = $this->rawFirstImageAttachment($parsed);
+
+        if ($attachment) {
+            $attachment['path'] = $this->storeAttachment($attachment, $camera, $normalizedSerial, $messageUid);
+        }
+
+        $receivedAt = filled($parsed['headers']['date'] ?? null)
+            ? CarbonImmutable::parse($parsed['headers']['date'])
+            : null;
+
+        $snapshot = CameraEmailSnapshot::query()->create([
+            'camera_id' => $camera?->id,
+            'message_uid' => $messageUid,
+            'serial_number' => $serialNumber,
+            'from_email' => $fromEmail,
+            'subject' => $this->decodeHeader((string) ($parsed['headers']['subject'] ?? '')),
+            'attachment_path' => $attachment['path'] ?? null,
+            'attachment_name' => $attachment['filename'] ?? null,
+            'attachment_mime' => $attachment['mime'] ?? null,
+            'attachment_size' => isset($attachment['contents']) ? strlen($attachment['contents']) : null,
+            'received_at' => $receivedAt,
+            'imported_at' => now(),
+        ]);
+
+        if ($camera instanceof Camera) {
+            $this->markCameraSeen($camera, $snapshot, $receivedAt);
+
+            return;
+        }
+
+        Log::warning('Camera snapshot email could not be matched to a camera.', [
+            'snapshot_id' => $snapshot->id,
+            'from_email' => $fromEmail,
+            'serial_number' => $serialNumber,
+        ]);
+    }
+
+    private function parseRawEmail(string $rawMessage): array
+    {
+        [$rawHeaders, $body] = $this->splitHeaderBody($rawMessage);
+        $headers = [];
+        $current = null;
+
+        foreach (preg_split('/\r\n|\n|\r/', $rawHeaders) ?: [] as $line) {
+            if (preg_match('/^\s+/', $line) && $current !== null) {
+                $headers[$current] .= ' '.trim($line);
+
+                continue;
+            }
+
+            if (! str_contains($line, ':')) {
+                continue;
+            }
+
+            [$name, $value] = explode(':', $line, 2);
+            $current = strtolower(trim($name));
+            $headers[$current] = trim($value);
+        }
+
+        return [
+            'headers' => $headers,
+            'body' => $body,
+        ];
+    }
+
+    private function splitHeaderBody(string $message): array
+    {
+        $message = str_replace(["\r\n", "\r"], "\n", $message);
+        $position = strpos($message, "\n\n");
+
+        if ($position === false) {
+            return [$message, ''];
+        }
+
+        return [substr($message, 0, $position), substr($message, $position + 2)];
+    }
+
+    private function parseAddressHeader(string $value): array
+    {
+        $decoded = $this->decodeHeader($value);
+
+        if (preg_match('/^\s*"?(.*?)"?\s*<([^>]+)>/', $decoded, $matches)) {
+            return [
+                'name' => trim($matches[1], " \t\""),
+                'email' => strtolower(trim($matches[2])),
+            ];
+        }
+
+        if (filter_var(trim($decoded), FILTER_VALIDATE_EMAIL)) {
+            return [
+                'name' => null,
+                'email' => strtolower(trim($decoded)),
+            ];
+        }
+
+        return [
+            'name' => trim($decoded) ?: null,
+            'email' => null,
+        ];
+    }
+
+    private function rawTextBody(array $message): ?string
+    {
+        $contentType = strtolower((string) ($message['headers']['content-type'] ?? 'text/plain'));
+        $boundary = $this->headerParameter($contentType, 'boundary');
+
+        if ($boundary === null) {
+            return $this->decodeMimeBody($message['body'], (string) ($message['headers']['content-transfer-encoding'] ?? ''));
+        }
+
+        foreach ($this->rawMimeParts($message['body'], $boundary) as $part) {
+            $partType = strtolower((string) ($part['headers']['content-type'] ?? 'text/plain'));
+
+            if (str_starts_with($partType, 'text/plain')) {
+                return $this->decodeMimeBody($part['body'], (string) ($part['headers']['content-transfer-encoding'] ?? ''));
+            }
+        }
+
+        return null;
+    }
+
+    private function rawFirstImageAttachment(array $message): ?array
+    {
+        $contentType = strtolower((string) ($message['headers']['content-type'] ?? 'text/plain'));
+        $boundary = $this->headerParameter($contentType, 'boundary');
+
+        if ($boundary === null) {
+            return null;
+        }
+
+        foreach ($this->rawMimeParts($message['body'], $boundary) as $part) {
+            $partType = strtolower((string) ($part['headers']['content-type'] ?? 'application/octet-stream'));
+
+            if (! str_starts_with($partType, 'image/')) {
+                continue;
+            }
+
+            $filename = $this->headerParameter((string) ($part['headers']['content-disposition'] ?? ''), 'filename')
+                ?: $this->headerParameter((string) ($part['headers']['content-type'] ?? ''), 'name')
+                ?: 'snapshot.jpg';
+
+            return [
+                'filename' => $this->decodeHeader($filename),
+                'mime' => str($partType)->before(';')->toString(),
+                'contents' => $this->decodeMimeBody($part['body'], (string) ($part['headers']['content-transfer-encoding'] ?? '')),
+            ];
+        }
+
+        return null;
+    }
+
+    private function rawMimeParts(string $body, string $boundary): array
+    {
+        $parts = [];
+        $chunks = explode('--'.$boundary, $body);
+
+        foreach ($chunks as $chunk) {
+            $chunk = trim($chunk, "\r\n");
+
+            if ($chunk === '' || $chunk === '--') {
+                continue;
+            }
+
+            $parts[] = $this->parseRawEmail($chunk);
+        }
+
+        return $parts;
+    }
+
+    private function headerParameter(string $header, string $parameter): ?string
+    {
+        if (! preg_match('/(?:^|;)\s*'.preg_quote($parameter, '/').'\s*=\s*"?([^";]+)"?/i', $header, $matches)) {
+            return null;
+        }
+
+        return trim($matches[1]);
+    }
+
+    private function decodeMimeBody(string $body, string $encoding): string
+    {
+        return match (strtolower(trim($encoding))) {
+            'base64' => base64_decode(preg_replace('/\s+/', '', $body) ?: '', true) ?: '',
+            'quoted-printable' => quoted_printable_decode($body),
+            default => $body,
+        };
     }
 
     private function fromEmail(?stdClass $overview): ?string
@@ -362,13 +700,19 @@ class IngestCameraEmailSnapshots extends Command
 
     private function decodeHeader(string $value): string
     {
-        $decoded = '';
+        if (function_exists('mb_decode_mimeheader')) {
+            $decoded = mb_decode_mimeheader($value);
 
-        foreach (imap_mime_header_decode($value) ?: [] as $part) {
-            $decoded .= $part->text;
+            return $decoded !== '' ? $decoded : $value;
         }
 
-        return $decoded !== '' ? $decoded : $value;
+        if (function_exists('iconv_mime_decode')) {
+            $decoded = iconv_mime_decode($value, ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8');
+
+            return $decoded !== false && $decoded !== '' ? $decoded : $value;
+        }
+
+        return $value;
     }
 
     private function storeAttachment(array $attachment, ?Camera $camera, ?string $normalizedSerial, string $messageUid): string

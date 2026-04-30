@@ -2,6 +2,7 @@
 
 return [
     'enabled' => (bool) env('CAMERA_EMAIL_INGEST_ENABLED', false),
+    'protocol' => env('CAMERA_EMAIL_PROTOCOL', 'imap'),
     'host' => env('CAMERA_EMAIL_HOST'),
     'port' => (int) env('CAMERA_EMAIL_PORT', 993),
     'encryption' => env('CAMERA_EMAIL_ENCRYPTION', 'ssl'),

@@ -44,6 +44,7 @@ class SettingsController extends Controller
 
         $this->writeEnvValues([
             'CAMERA_EMAIL_INGEST_ENABLED' => $request->boolean('enabled') ? 'true' : 'false',
+            'CAMERA_EMAIL_PROTOCOL' => $validated['protocol'],
             'CAMERA_EMAIL_HOST' => $validated['host'] ?? '',
             'CAMERA_EMAIL_PORT' => (string) $validated['port'],
             'CAMERA_EMAIL_ENCRYPTION' => $validated['encryption'],
@@ -70,6 +71,18 @@ class SettingsController extends Controller
         $password = filled($validated['password'] ?? null)
             ? $validated['password']
             : ($this->cameraEmailSettings()['password'] ?? '');
+
+        if (($validated['protocol'] ?? 'imap') === 'pop3') {
+            $message = $this->testPop3Connection([
+                ...$validated,
+                'password' => $password,
+                'validate_cert' => $request->boolean('validate_cert'),
+            ]);
+
+            return back()
+                ->withInput($request->except('password'))
+                ->with($message['ok'] ? 'email_test_status' : 'email_test_error', $message['message']);
+        }
 
         if (! function_exists('imap_open')) {
             return back()
@@ -104,6 +117,7 @@ class SettingsController extends Controller
 
         return [
             'enabled' => filter_var($env['CAMERA_EMAIL_INGEST_ENABLED'] ?? config('camera_email.enabled'), FILTER_VALIDATE_BOOLEAN),
+            'protocol' => $env['CAMERA_EMAIL_PROTOCOL'] ?? config('camera_email.protocol', 'imap'),
             'host' => $env['CAMERA_EMAIL_HOST'] ?? config('camera_email.host'),
             'port' => (int) ($env['CAMERA_EMAIL_PORT'] ?? config('camera_email.port', 993)),
             'encryption' => $env['CAMERA_EMAIL_ENCRYPTION'] ?? config('camera_email.encryption', 'ssl'),
@@ -120,6 +134,7 @@ class SettingsController extends Controller
     {
         return $request->validate([
             'enabled' => ['nullable', 'boolean'],
+            'protocol' => ['required', 'in:imap,pop3'],
             'host' => ['required', 'string', 'max:255'],
             'port' => ['required', 'integer', 'min:1', 'max:65535'],
             'encryption' => ['required', 'in:ssl,tls,none'],
@@ -130,6 +145,73 @@ class SettingsController extends Controller
             'mark_seen_after_import' => ['nullable', 'boolean'],
             'delete_after_import' => ['nullable', 'boolean'],
         ]);
+    }
+
+    private function testPop3Connection(array $settings): array
+    {
+        $transport = match (strtolower((string) $settings['encryption'])) {
+            'ssl' => 'ssl',
+            'tls' => 'tcp',
+            default => 'tcp',
+        };
+
+        $context = stream_context_create([
+            'ssl' => [
+                'verify_peer' => (bool) ($settings['validate_cert'] ?? true),
+                'verify_peer_name' => (bool) ($settings['validate_cert'] ?? true),
+            ],
+        ]);
+
+        $socket = @stream_socket_client(
+            $transport.'://'.$settings['host'].':'.$settings['port'],
+            $errorCode,
+            $errorMessage,
+            20,
+            STREAM_CLIENT_CONNECT,
+            $context
+        );
+
+        if (! is_resource($socket)) {
+            return ['ok' => false, 'message' => "Connection failed: {$errorMessage} ({$errorCode})"];
+        }
+
+        try {
+            $this->pop3ReadResponse($socket);
+
+            if ($settings['encryption'] === 'tls') {
+                $this->pop3Command($socket, 'STLS');
+                stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+            }
+
+            $this->pop3Command($socket, 'USER '.$settings['username']);
+            $this->pop3Command($socket, 'PASS '.$settings['password']);
+            $status = $this->pop3Command($socket, 'STAT');
+            $this->pop3Command($socket, 'QUIT');
+        } catch (\Throwable $exception) {
+            fclose($socket);
+
+            return ['ok' => false, 'message' => 'Connection failed: '.$exception->getMessage()];
+        }
+
+        return ['ok' => true, 'message' => 'POP3 connection successful. '.$status];
+    }
+
+    private function pop3Command($socket, string $command): string
+    {
+        fwrite($socket, $command."\r\n");
+
+        return $this->pop3ReadResponse($socket);
+    }
+
+    private function pop3ReadResponse($socket): string
+    {
+        $line = fgets($socket);
+
+        if ($line === false || ! str_starts_with($line, '+OK')) {
+            throw new \RuntimeException(trim((string) $line) ?: 'No response from POP3 server');
+        }
+
+        return rtrim($line, "\r\n");
     }
 
     private function mailboxString(array $settings): string

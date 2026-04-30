@@ -8,13 +8,13 @@
             <div class="flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <h2 class="text-xl font-bold text-slate-950">Snapshot mailbox</h2>
-                    <p class="mt-1 text-sm text-slate-500">The scheduler checks this mailbox every five minutes when ingest is enabled.</p>
+                    <p class="mt-1 text-sm text-slate-500">The scheduler checks this mailbox every five minutes when ingest is enabled. POP3 does not require the PHP IMAP extension.</p>
                 </div>
 
                 @if ($imapEnabled)
-                    <span class="rounded-md bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">IMAP enabled</span>
+                    <span class="rounded-md bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">PHP IMAP available</span>
                 @else
-                    <span class="rounded-md bg-red-100 px-3 py-1 text-sm font-semibold text-red-700">IMAP missing</span>
+                    <span class="rounded-md bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-700">Use POP3</span>
                 @endif
             </div>
 
@@ -38,6 +38,16 @@
                         <input type="checkbox" name="enabled" value="1" @checked(old('enabled', $settings['enabled'])) class="h-4 w-4 rounded border-slate-300 text-brand-700">
                         Enable scheduled email ingest
                     </label>
+                </div>
+
+                <div>
+                    <label for="protocol" class="mb-2 block text-sm font-semibold text-slate-700">Protocol</label>
+                    @php($protocol = old('protocol', $settings['protocol'] ?? 'pop3'))
+                    <select id="protocol" name="protocol" class="field-control">
+                        <option value="pop3" @selected($protocol === 'pop3')>POP3 - no PHP extension needed</option>
+                        <option value="imap" @selected($protocol === 'imap')>IMAP - requires PHP IMAP extension</option>
+                    </select>
+                    @error('protocol') <p class="mt-2 text-sm text-red-600">{{ $message }}</p> @enderror
                 </div>
 
                 <div>
@@ -116,9 +126,11 @@
             </section>
 
             <section class="panel p-6">
-                <h2 class="text-xl font-bold text-slate-950">Server requirement</h2>
-                <p class="mt-3 text-sm leading-6 text-slate-600">The cPanel PHP 8.4 IMAP extension must be installed for the test and scheduled import to work.</p>
-                <pre class="mt-4 overflow-x-auto rounded-lg bg-slate-950 p-4 text-xs text-white">dnf install ea-php84-php-imap</pre>
+                <h2 class="text-xl font-bold text-slate-950">Recommended mode</h2>
+                <p class="mt-3 text-sm leading-6 text-slate-600">Use POP3 with SSL on port 995 if cPanel cannot provide the PHP IMAP extension. Leave imported emails in the mailbox unless you explicitly want the app to delete them.</p>
+                <pre class="mt-4 overflow-x-auto rounded-lg bg-slate-950 p-4 text-xs text-white">Protocol: POP3
+Port: 995
+Encryption: SSL</pre>
             </section>
         </aside>
     </div>
