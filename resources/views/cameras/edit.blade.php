@@ -17,11 +17,11 @@
     </section>
 
     @if (auth()->user()?->canUpdateCamera($camera))
-        <section class="panel mt-6 border-red-200 bg-red-50 p-6">
+        <section class="panel mt-6 p-6">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h2 class="text-lg font-semibold text-red-800">Delete camera</h2>
-                    <p class="mt-1 text-sm text-red-700">This removes the camera from monitoring and reports.</p>
+                    <h2 class="text-lg font-semibold text-slate-950">Delete camera</h2>
+                    <p class="mt-1 text-sm text-slate-600">This removes the camera from monitoring and reports.</p>
                 </div>
 
                 <form method="POST" action="{{ route('cameras.destroy', $camera) }}" onsubmit="return confirm(@js('Delete '.$camera->name.'? This cannot be undone.'));">
