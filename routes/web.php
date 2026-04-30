@@ -60,6 +60,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/cameras/map', [CameraController::class, 'map'])->name('cameras.map');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::get('/settings/hikvision-setup', [SettingsController::class, 'hikvisionSetup'])->name('settings.hikvision-setup');
+    Route::get('/settings/camera-email', [SettingsController::class, 'cameraEmail'])->name('settings.camera-email');
+    Route::post('/settings/camera-email', [SettingsController::class, 'updateCameraEmail'])->name('settings.camera-email.update');
+    Route::post('/settings/camera-email/test', [SettingsController::class, 'testCameraEmail'])->name('settings.camera-email.test');
     Route::post('/cameras', [CameraController::class, 'store'])->name('cameras.store');
     Route::get('/cameras/{camera}', [CameraController::class, 'show'])->name('cameras.show');
     Route::get('/cameras/{camera}/edit', [CameraController::class, 'edit'])->name('cameras.edit');

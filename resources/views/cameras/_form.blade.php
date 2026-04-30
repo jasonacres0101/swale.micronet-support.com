@@ -49,7 +49,14 @@
     @error('mac_address') <p class="mt-2 text-sm text-red-600">{{ $message }}</p> @enderror
 </div>
 
-<div class="lg:col-span-2">
+<div>
+    <label for="serial_number" class="mb-2 block text-sm font-semibold text-slate-700">Camera serial number</label>
+    <input id="serial_number" name="serial_number" type="text" value="{{ old('serial_number', $camera->serial_number) }}" class="field-control">
+    <p class="mt-2 text-xs text-slate-500">Used to match snapshot emails when the sender address starts with this serial number.</p>
+    @error('serial_number') <p class="mt-2 text-sm text-red-600">{{ $message }}</p> @enderror
+</div>
+
+<div>
     <label for="web_ui_url" class="mb-2 block text-sm font-semibold text-slate-700">Camera web UI URL</label>
     <input id="web_ui_url" name="web_ui_url" type="url" value="{{ old('web_ui_url', $camera->web_ui_url) }}" required class="field-control">
     @error('web_ui_url') <p class="mt-2 text-sm text-red-600">{{ $message }}</p> @enderror

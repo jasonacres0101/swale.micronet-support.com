@@ -22,6 +22,15 @@
                 </p>
                 <p class="mt-4 text-sm font-semibold text-brand-700">Open setup guide</p>
             </a>
+
+            <a href="{{ route('settings.camera-email') }}" class="panel block p-5 transition hover:border-brand-300 hover:shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
+                <p class="text-xs font-semibold uppercase tracking-wide text-brand-500">Email ingest</p>
+                <h2 class="mt-2 text-lg font-semibold text-slate-950">Camera snapshot mailbox</h2>
+                <p class="mt-3 text-sm leading-6 text-slate-600">
+                    Configure the mailbox used to read camera snapshot emails, test IMAP access, and enable scheduled imports.
+                </p>
+                <p class="mt-4 text-sm font-semibold text-brand-700">Open email settings</p>
+            </a>
         @endif
 
         @if (auth()->user()?->canCreateMaintenance() || auth()->user()?->canUpdateMaintenance())

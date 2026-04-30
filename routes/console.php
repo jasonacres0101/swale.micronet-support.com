@@ -9,4 +9,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('cameras:check-status')->everyMinute();
+Schedule::command('cameras:ingest-email-snapshots')->everyFiveMinutes();
 Schedule::command('maintenance:update-status')->hourly();

@@ -108,6 +108,10 @@
                             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Normalized MAC</p>
                             <p class="mt-1 break-all text-sm font-semibold text-slate-950">{{ $camera->mac_address_normalized ?: 'Not set' }}</p>
                         </div>
+                        <div class="col-span-2 rounded-lg bg-white/80 p-3">
+                            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Serial number</p>
+                            <p class="mt-1 break-all text-sm font-semibold text-slate-950">{{ $camera->serial_number ?: 'Not set' }}</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -276,6 +280,37 @@
                             @endforelse
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <section class="panel overflow-hidden">
+                <div class="border-b border-slate-200 px-5 py-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Email snapshots</p>
+                    <h2 class="mt-1 text-lg font-semibold text-slate-950">Latest camera screenshots</h2>
+                </div>
+
+                <div class="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
+                    @forelse ($latestEmailSnapshots as $snapshot)
+                        <article class="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                            @if ($snapshot->attachmentUrl())
+                                <a href="{{ $snapshot->attachmentUrl() }}" target="_blank" rel="noreferrer" class="block bg-slate-200">
+                                    <img src="{{ $snapshot->attachmentUrl() }}" alt="Camera snapshot from {{ optional($snapshot->received_at)->format('d M Y H:i') ?? 'email' }}" class="aspect-video w-full object-cover">
+                                </a>
+                            @else
+                                <div class="flex aspect-video items-center justify-center bg-slate-200 text-sm font-semibold text-slate-500">
+                                    No image attachment
+                                </div>
+                            @endif
+
+                            <div class="space-y-2 p-4 text-sm">
+                                <p class="font-semibold text-slate-950">{{ optional($snapshot->received_at)->format('d M Y H:i') ?? 'Unknown time' }}</p>
+                                <p class="truncate text-slate-600">{{ $snapshot->subject ?: 'No subject' }}</p>
+                                <p class="truncate text-xs text-slate-500">{{ $snapshot->from_email ?: 'Unknown sender' }}</p>
+                            </div>
+                        </article>
+                    @empty
+                        <p class="rounded-lg bg-slate-50 px-4 py-5 text-sm text-slate-600 md:col-span-2 xl:col-span-3">No snapshot emails have been imported for this camera yet.</p>
+                    @endforelse
                 </div>
             </section>
         </main>

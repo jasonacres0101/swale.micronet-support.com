@@ -79,6 +79,11 @@ class CameraController extends Controller
                 ->latest('due_at')
                 ->take(5)
                 ->get(),
+            'latestEmailSnapshots' => $camera->emailSnapshots()
+                ->latest('received_at')
+                ->latest('id')
+                ->take(6)
+                ->get(),
         ]);
     }
 
@@ -190,6 +195,7 @@ class CameraController extends Controller
             'ownership_type' => ['required', 'in:council,client'],
             'ip_address' => ['required', 'string', 'max:255', Rule::unique('cameras', 'ip_address')->ignore($camera?->id)],
             'mac_address' => ['nullable', 'string', 'max:255'],
+            'serial_number' => ['nullable', 'string', 'max:255', Rule::unique('cameras', 'serial_number')->ignore($camera?->id)],
             'web_ui_url' => ['required', 'url', 'max:2048'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],

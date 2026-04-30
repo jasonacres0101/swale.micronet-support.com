@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\NormalizesMacAddresses;
+use App\Support\NormalizesSerialNumbers;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +21,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'ip_address',
     'mac_address',
     'mac_address_normalized',
+    'serial_number',
+    'serial_number_normalized',
     'web_ui_url',
     'latitude',
     'longitude',
@@ -45,6 +48,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Camera extends Model
 {
     use NormalizesMacAddresses;
+    use NormalizesSerialNumbers;
 
     protected function casts(): array
     {
@@ -64,6 +68,10 @@ class Camera extends Model
         static::saving(function (Camera $camera): void {
             if ($camera->isDirty('mac_address')) {
                 $camera->mac_address_normalized = self::normalizeMacAddress($camera->mac_address);
+            }
+
+            if ($camera->isDirty('serial_number')) {
+                $camera->serial_number_normalized = self::normalizeSerialNumber($camera->serial_number);
             }
 
             if ($camera->isDirty('status')) {
@@ -90,6 +98,11 @@ class Camera extends Model
     public function statusLogs(): HasMany
     {
         return $this->hasMany(CameraStatusLog::class);
+    }
+
+    public function emailSnapshots(): HasMany
+    {
+        return $this->hasMany(CameraEmailSnapshot::class);
     }
 
     public function maintenanceTasks(): HasMany
