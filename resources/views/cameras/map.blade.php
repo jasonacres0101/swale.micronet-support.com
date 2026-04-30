@@ -25,9 +25,6 @@
         <div class="absolute left-5 top-5 z-[500] max-w-md rounded-lg border border-white/70 bg-white/85 p-4 shadow-xl backdrop-blur">
             <h2 class="text-lg font-bold text-slate-950">Status legend</h2>
             <div class="mt-3 flex flex-wrap gap-3 text-sm text-slate-600">
-                <span class="inline-flex items-center gap-2"><span class="h-3 w-3 rounded-full border-4 border-emerald-200 bg-emerald-500"></span> Site online</span>
-                <span class="inline-flex items-center gap-2"><span class="h-3 w-3 rounded-full border-4 border-amber-200 bg-amber-500"></span> Site degraded</span>
-                <span class="inline-flex items-center gap-2"><span class="h-3 w-3 rounded-full border-4 border-red-200 bg-red-500"></span> Site offline</span>
                 <span class="inline-flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-emerald-500"></span> Camera online</span>
                 <span class="inline-flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-red-500"></span> Camera offline</span>
                 <span class="inline-flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-slate-500"></span> Camera unknown</span>
@@ -91,45 +88,28 @@
             crossorigin=""
         ></script>
         <script>
-            const initialSites = @json($mapSites);
             const initialCameras = @json($mapCameras);
             const focusCameraId = @json($focusCameraId);
             const endpoint = @json(route('api.cameras.live-status', request()->query()));
             const warning = document.getElementById('map-live-warning');
+            const kentCenter = [51.2787, 0.5217];
+            const kentZoom = 9;
 
-            const map = L.map('camera-map', { zoomControl: true });
+            const map = L.map('camera-map', { zoomControl: true }).setView(kentCenter, kentZoom);
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(map);
 
-            const siteMarkers = new Map();
             const cameraMarkers = new Map();
             let hasInitialView = false;
-
-            const siteColor = (status) => ({
-                online: '#16a34a',
-                degraded: '#d97706',
-                offline: '#dc2626',
-                unknown: '#64748b',
-            }[status] || '#64748b');
 
             const cameraColor = (status) => ({
                 online: '#16a34a',
                 offline: '#dc2626',
                 unknown: '#64748b',
             }[status] || '#64748b');
-
-            const sitePopupMarkup = (site) => `
-                <div style="min-width: 220px;">
-                    <strong>${site.name}</strong><br>
-                    <span>${site.organisation_name || 'Unassigned organisation'}</span><br>
-                    <span>Status: ${site.status}</span><br>
-                    <span>Cameras: ${site.camera_count ?? 0}</span><br>
-                    <span>${site.what3words ? `what3words: ${site.what3words}` : ''}</span>
-                </div>
-            `;
 
             const cameraPopupMarkup = (camera) => `
                 <div style="min-width: 220px;">
@@ -143,32 +123,7 @@
                 </div>
             `;
 
-            const syncMarkers = (sites, cameras) => {
-                const bounds = [];
-
-                sites.forEach((site) => {
-                    if (site.latitude == null || site.longitude == null) return;
-
-                    let marker = siteMarkers.get(site.id);
-
-                    if (!marker) {
-                        marker = L.circleMarker([site.latitude, site.longitude], {
-                            radius: 15,
-                            fillColor: siteColor(site.status),
-                            color: '#ffffff',
-                            weight: 5,
-                            fillOpacity: 0.9,
-                        }).addTo(map);
-
-                        siteMarkers.set(site.id, marker);
-                    }
-
-                    marker.setLatLng([site.latitude, site.longitude]);
-                    marker.setStyle({ fillColor: siteColor(site.status) });
-                    marker.bindPopup(sitePopupMarkup(site));
-                    bounds.push([site.latitude, site.longitude]);
-                });
-
+            const syncMarkers = (cameras) => {
                 cameras.forEach((camera) => {
                     if (camera.latitude == null || camera.longitude == null) return;
 
@@ -189,7 +144,6 @@
                     marker.setLatLng([camera.latitude, camera.longitude]);
                     marker.setStyle({ fillColor: cameraColor(camera.status) });
                     marker.bindPopup(cameraPopupMarkup(camera));
-                    bounds.push([camera.latitude, camera.longitude]);
                 });
 
                 if (!hasInitialView && focusCameraId && cameraMarkers.has(focusCameraId)) {
@@ -197,16 +151,12 @@
                     map.setView(marker.getLatLng(), 17);
                     marker.openPopup();
                     hasInitialView = true;
-                } else if (!hasInitialView && bounds.length) {
-                    map.fitBounds(bounds, { padding: [60, 60] });
-                    hasInitialView = true;
                 } else if (!hasInitialView) {
-                    map.setView([54.5, -2.5], 6);
                     hasInitialView = true;
                 }
             };
 
-            syncMarkers(initialSites, initialCameras);
+            syncMarkers(initialCameras);
 
             const poll = async () => {
                 try {
@@ -218,10 +168,9 @@
                     if (!response.ok) throw new Error('Polling failed');
 
                     const data = await response.json();
-                    const sites = data.sites || [];
                     const cameras = (data.cameras || []).filter((camera) => camera.latitude != null && camera.longitude != null);
 
-                    syncMarkers(sites, cameras);
+                    syncMarkers(cameras);
                     warning.classList.add('hidden');
                 } catch (error) {
                     warning.classList.remove('hidden');
