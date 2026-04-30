@@ -296,8 +296,9 @@ class IngestCameraEmailSnapshots extends Command
             $attachment['path'] = $this->storeAttachment($attachment, $camera, $normalizedSerial, $messageUid);
         }
 
-        $receivedAt = filled($parsed['headers']['date'] ?? null)
-            ? CarbonImmutable::parse($parsed['headers']['date'])
+        $dateHeader = $parsed['headers']['date'] ?? $parsed['headers']['delivery-date'] ?? null;
+        $receivedAt = filled($dateHeader)
+            ? CarbonImmutable::parse($dateHeader)
             : null;
 
         $snapshot = CameraEmailSnapshot::query()->create([
@@ -393,7 +394,7 @@ class IngestCameraEmailSnapshots extends Command
 
     private function rawTextBody(array $message): ?string
     {
-        $contentType = strtolower((string) ($message['headers']['content-type'] ?? 'text/plain'));
+        $contentType = (string) ($message['headers']['content-type'] ?? 'text/plain');
         $boundary = $this->headerParameter($contentType, 'boundary');
 
         if ($boundary === null) {
@@ -413,7 +414,7 @@ class IngestCameraEmailSnapshots extends Command
 
     private function rawFirstImageAttachment(array $message): ?array
     {
-        $contentType = strtolower((string) ($message['headers']['content-type'] ?? 'text/plain'));
+        $contentType = (string) ($message['headers']['content-type'] ?? 'text/plain');
         $boundary = $this->headerParameter($contentType, 'boundary');
 
         if ($boundary === null) {
