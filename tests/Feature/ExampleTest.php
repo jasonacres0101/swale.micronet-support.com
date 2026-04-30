@@ -387,6 +387,7 @@ class ExampleTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('cameras.0.id', $camera->id)
+            ->assertJsonPath('cameras.0.show_url', route('cameras.show', $camera))
             ->assertJsonPath('cameras.0.latest_event_type', 'VMD')
             ->assertJsonPath('cameras.0.latest_event_state', 'active')
             ->assertJsonPath('cameras.0.latest_event_description', 'Motion detected in lobby');
@@ -482,6 +483,8 @@ class ExampleTest extends TestCase
 
         $response
             ->assertOk()
+            ->assertJsonPath('show_url', route('cameras.show', $camera))
+            ->assertJsonPath('organisation_name', 'Example Council')
             ->assertJsonPath('organisation.name', 'Example Council')
             ->assertJsonPath('site.name', 'Town Centre')
             ->assertJsonPath('site.status', 'degraded')
