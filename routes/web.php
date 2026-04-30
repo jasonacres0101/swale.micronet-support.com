@@ -68,6 +68,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/cameras/{camera}', [CameraController::class, 'show'])->name('cameras.show');
     Route::get('/cameras/{camera}/edit', [CameraController::class, 'edit'])->name('cameras.edit');
     Route::put('/cameras/{camera}', [CameraController::class, 'update'])->name('cameras.update');
+    Route::delete('/cameras/{camera}', [CameraController::class, 'destroy'])->name('cameras.destroy');
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 });
 

@@ -138,6 +138,18 @@ class CameraController extends Controller
             ->with('status', 'Camera details updated.');
     }
 
+    public function destroy(Request $request, Camera $camera): RedirectResponse
+    {
+        $camera->loadMissing('site.organisation');
+        abort_unless($request->user()?->canUpdateCamera($camera), 403);
+
+        $camera->delete();
+
+        return redirect()
+            ->route('cameras.index')
+            ->with('status', 'Camera deleted.');
+    }
+
     public function map(Request $request): View
     {
         $focusCameraId = $request->integer('camera');

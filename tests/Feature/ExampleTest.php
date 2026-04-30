@@ -314,6 +314,38 @@ class ExampleTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_engineer_can_delete_camera_after_confirmation_ui_is_available(): void
+    {
+        $engineer = User::factory()->create([
+            'role' => User::ROLE_ENGINEER,
+            'is_active' => true,
+        ]);
+
+        $camera = Camera::query()->create([
+            'name' => 'Delete Me Camera',
+            'site_name' => 'HQ',
+            'location_name' => 'Temporary Pole',
+            'ip_address' => '10.91.0.10',
+            'web_ui_url' => 'http://10.91.0.10',
+            'status' => 'offline',
+            'is_online' => false,
+        ]);
+
+        $this->actingAs($engineer)
+            ->get(route('cameras.edit', $camera))
+            ->assertOk()
+            ->assertSee('Delete camera')
+            ->assertSee('This cannot be undone');
+
+        $this->actingAs($engineer)
+            ->delete(route('cameras.destroy', $camera))
+            ->assertRedirect(route('cameras.index'));
+
+        $this->assertDatabaseMissing('cameras', [
+            'id' => $camera->id,
+        ]);
+    }
+
     public function test_hikvision_setup_info_page_is_available_to_alarm_admin_users(): void
     {
         $engineer = User::factory()->create([

@@ -106,6 +106,11 @@
                         <a href="{{ $camera->web_ui_url }}" target="_blank" rel="noreferrer" class="btn-secondary">Open web UI</a>
                         @if (auth()->user()?->canUpdateCamera($camera))
                             <button type="button" data-psa-placeholder class="btn-secondary">Create PSA ticket</button>
+                            <form method="POST" action="{{ route('cameras.destroy', $camera) }}" onsubmit="return confirm(@js('Delete '.$camera->name.'? This cannot be undone.'));">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn-danger w-full">Delete camera</button>
+                            </form>
                         @endif
                     </div>
                 </div>
