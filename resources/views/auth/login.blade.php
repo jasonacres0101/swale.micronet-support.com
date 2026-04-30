@@ -8,7 +8,7 @@
             </p>
         </div>
 
-        <form method="POST" action="{{ route('login.store') }}" class="space-y-4">
+        <form method="POST" action="{{ route('login.store') }}" class="space-y-4" autocomplete="off">
             @csrf
 
             <div>
@@ -17,7 +17,10 @@
                     id="email"
                     name="email"
                     type="email"
-                    value="{{ old('email') }}"
+                    value=""
+                    autocomplete="off"
+                    autocapitalize="none"
+                    spellcheck="false"
                     required
                     autofocus
                     class="field-control"
@@ -33,6 +36,7 @@
                     id="password"
                     name="password"
                     type="password"
+                    autocomplete="off"
                     required
                     class="field-control"
                 >
@@ -46,4 +50,25 @@
             <button type="submit" class="btn-primary w-full">Sign in</button>
         </form>
     </div>
+
+    <script>
+        (() => {
+            const clearDemoLogin = () => {
+                const email = document.getElementById('email');
+                const password = document.getElementById('password');
+
+                if (email && email.value === 'admin@micronet.local') {
+                    email.value = '';
+                }
+
+                if (password && password.value === 'password') {
+                    password.value = '';
+                }
+            };
+
+            clearDemoLogin();
+            window.setTimeout(clearDemoLogin, 250);
+            window.setTimeout(clearDemoLogin, 1000);
+        })();
+    </script>
 </x-layouts.guest>
