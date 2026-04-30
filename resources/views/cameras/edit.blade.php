@@ -27,7 +27,7 @@
                 <form method="POST" action="{{ route('cameras.destroy', $camera) }}" onsubmit="return confirm(@js('Delete '.$camera->name.'? This cannot be undone.'));">
                     @csrf
                     @method('DELETE')
-                    <button type="submit" class="btn-danger">Delete camera</button>
+                    <button type="submit" class="inline-flex items-center justify-center rounded-md bg-red-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500/35">Delete camera</button>
                 </form>
             </div>
         </section>
