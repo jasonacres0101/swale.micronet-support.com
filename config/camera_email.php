@@ -12,4 +12,5 @@ return [
     'password' => env('CAMERA_EMAIL_PASSWORD'),
     'delete_after_import' => (bool) env('CAMERA_EMAIL_DELETE_AFTER_IMPORT', false),
     'mark_seen_after_import' => (bool) env('CAMERA_EMAIL_MARK_SEEN_AFTER_IMPORT', true),
+    'offline_after_minutes' => (int) env('CAMERA_EMAIL_OFFLINE_AFTER_MINUTES', 65),
 ];

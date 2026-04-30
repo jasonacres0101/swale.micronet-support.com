@@ -25,6 +25,7 @@
     $siteName = $camera->site?->name ?: $camera->site_name;
     $connectivityType = str($camera->connectivity_type ?: 'unknown')->replace('_', ' ')->title();
     $latestEvent = $camera->latestHikvisionEvent;
+    $latestSnapshotUrl = $latestEmailSnapshot?->attachmentUrl();
 @endphp
 
 <x-layouts.app
@@ -61,6 +62,22 @@
                     <p class="mt-3 max-w-2xl text-sm leading-6 text-brand-50/85">
                         {{ $camera->description ?: 'No camera description has been added yet.' }}
                     </p>
+                </div>
+
+                <div id="camera-overview-latest-snapshot" class="relative mt-6 max-w-3xl">
+                    @if ($latestSnapshotUrl)
+                        <a href="{{ $latestSnapshotUrl }}" target="_blank" rel="noreferrer" class="block overflow-hidden rounded-lg border border-white/10 bg-white/10">
+                            <img src="{{ $latestSnapshotUrl }}" alt="Latest screenshot from {{ optional($latestEmailSnapshot->received_at)->format('d M Y H:i') ?? $camera->name }}" class="aspect-video w-full object-cover">
+                            <div class="flex flex-col gap-1 border-t border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                <span class="text-xs font-semibold uppercase tracking-wide text-brand-100">Latest screenshot</span>
+                                <span class="text-sm font-semibold text-white">{{ optional($latestEmailSnapshot->received_at)->format('d M Y H:i') ?? 'Unknown time' }}</span>
+                            </div>
+                        </a>
+                    @else
+                        <div class="rounded-lg border border-white/10 bg-white/10 px-4 py-5 text-sm font-semibold text-brand-50">
+                            No latest screenshot has been imported yet.
+                        </div>
+                    @endif
                 </div>
 
                 <div class="relative mt-6 grid gap-3 md:grid-cols-3">
@@ -286,10 +303,13 @@
             <section class="panel overflow-hidden">
                 <div class="border-b border-slate-200 px-5 py-4">
                     <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Email snapshots</p>
-                    <h2 class="mt-1 text-lg font-semibold text-slate-950">Latest camera screenshots</h2>
+                    <div class="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <h2 class="text-lg font-semibold text-slate-950">Latest camera screenshots</h2>
+                        <p id="camera-snapshots-refresh" class="text-xs font-semibold text-slate-500">Auto-refreshing</p>
+                    </div>
                 </div>
 
-                <div class="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
+                <div id="camera-snapshots-grid" class="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
                     @forelse ($latestEmailSnapshots as $snapshot)
                         <article class="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                             @if ($snapshot->attachmentUrl())
@@ -309,7 +329,7 @@
                             </div>
                         </article>
                     @empty
-                        <p class="rounded-lg bg-slate-50 px-4 py-5 text-sm text-slate-600 md:col-span-2 xl:col-span-3">No snapshot emails have been imported for this camera yet.</p>
+                        <p id="camera-snapshots-empty" class="rounded-lg bg-slate-50 px-4 py-5 text-sm text-slate-600 md:col-span-2 xl:col-span-3">No snapshot emails have been imported for this camera yet.</p>
                     @endforelse
                 </div>
             </section>
@@ -393,7 +413,11 @@
         <script>
             (() => {
                 const endpoint = @json(route('api.cameras.live-status.show', $camera));
+                const snapshotsEndpoint = @json(route('api.cameras.snapshots', $camera));
                 const warning = document.getElementById('camera-live-warning');
+                const overviewLatestSnapshot = document.getElementById('camera-overview-latest-snapshot');
+                const snapshotsGrid = document.getElementById('camera-snapshots-grid');
+                const snapshotsRefresh = document.getElementById('camera-snapshots-refresh');
                 const statusPill = document.getElementById('camera-status-pill');
                 const statusDot = document.getElementById('camera-status-dot');
                 const statusLabel = document.getElementById('camera-status-label');
@@ -414,6 +438,12 @@
                 };
 
                 const formatDate = (value) => value ? new Date(value).toLocaleString() : 'Never';
+                const escapeHtml = (value) => (value ?? '').toString()
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;');
 
                 const apply = (camera) => {
                     const [pillBg, pillText, dotBg] = statusClasses[camera.status] || statusClasses.unknown;
@@ -448,8 +478,68 @@
                     }
                 };
 
+                const snapshotCard = (snapshot) => {
+                    const image = snapshot.attachment_url
+                        ? `<a href="${escapeHtml(snapshot.attachment_url)}" target="_blank" rel="noreferrer" class="block bg-slate-200">
+                            <img src="${escapeHtml(snapshot.attachment_url)}" alt="Camera snapshot from ${escapeHtml(snapshot.received_label)}" class="aspect-video w-full object-cover">
+                        </a>`
+                        : `<div class="flex aspect-video items-center justify-center bg-slate-200 text-sm font-semibold text-slate-500">
+                            No image attachment
+                        </div>`;
+
+                    return `<article class="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                        ${image}
+                        <div class="space-y-2 p-4 text-sm">
+                            <p class="font-semibold text-slate-950">${escapeHtml(snapshot.received_label)}</p>
+                            <p class="truncate text-slate-600">${escapeHtml(snapshot.subject)}</p>
+                            <p class="truncate text-xs text-slate-500">${escapeHtml(snapshot.from_email)}</p>
+                        </div>
+                    </article>`;
+                };
+
+                const renderOverviewSnapshot = (snapshot) => {
+                    if (!overviewLatestSnapshot) return;
+
+                    if (!snapshot || !snapshot.attachment_url) {
+                        overviewLatestSnapshot.innerHTML = `<div class="rounded-lg border border-white/10 bg-white/10 px-4 py-5 text-sm font-semibold text-brand-50">
+                            No latest screenshot has been imported yet.
+                        </div>`;
+                        return;
+                    }
+
+                    overviewLatestSnapshot.innerHTML = `<a href="${escapeHtml(snapshot.attachment_url)}" target="_blank" rel="noreferrer" class="block overflow-hidden rounded-lg border border-white/10 bg-white/10">
+                        <img src="${escapeHtml(snapshot.attachment_url)}" alt="Latest screenshot from ${escapeHtml(snapshot.received_label)}" class="aspect-video w-full object-cover">
+                        <div class="flex flex-col gap-1 border-t border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                            <span class="text-xs font-semibold uppercase tracking-wide text-brand-100">Latest screenshot</span>
+                            <span class="text-sm font-semibold text-white">${escapeHtml(snapshot.received_label)}</span>
+                        </div>
+                    </a>`;
+                };
+
+                const pollSnapshots = async () => {
+                    try {
+                        const response = await fetch(snapshotsEndpoint, {
+                            headers: { 'Accept': 'application/json' },
+                            credentials: 'same-origin',
+                        });
+
+                        if (!response.ok) throw new Error('Snapshot polling failed');
+
+                        const data = await response.json();
+                        const snapshots = data.snapshots || [];
+                        renderOverviewSnapshot(snapshots[0]);
+                        snapshotsGrid.innerHTML = snapshots.length
+                            ? snapshots.slice(0, 6).map(snapshotCard).join('')
+                            : '<p id="camera-snapshots-empty" class="rounded-lg bg-slate-50 px-4 py-5 text-sm text-slate-600 md:col-span-2 xl:col-span-3">No snapshot emails have been imported for this camera yet.</p>';
+                        snapshotsRefresh.textContent = `Auto-refreshed ${new Date().toLocaleTimeString()}`;
+                    } catch (error) {
+                        snapshotsRefresh.textContent = 'Snapshot refresh issue';
+                    }
+                };
+
                 poll();
                 window.setInterval(poll, 5000);
+                window.setInterval(pollSnapshots, 30000);
             })();
         </script>
     @endpush

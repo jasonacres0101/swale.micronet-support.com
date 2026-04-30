@@ -1,7 +1,7 @@
 <x-layouts.app
     :title="'Camera Email Settings | '.config('app.name')"
     heading="Camera email settings"
-    subheading="Configure the IMAP mailbox used to import scheduled camera screenshot emails."
+    subheading="Configure the mailbox used to import scheduled camera screenshot emails."
 >
     <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <section class="panel p-6">
@@ -91,6 +91,15 @@
                     @error('password') <p class="mt-2 text-sm text-red-600">{{ $message }}</p> @enderror
                 </div>
 
+                <div class="lg:col-span-2">
+                    <label for="offline_after_minutes" class="mb-2 block text-sm font-semibold text-slate-700">Show camera offline after</label>
+                    <div class="grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-center">
+                        <input id="offline_after_minutes" name="offline_after_minutes" type="number" min="5" max="1440" value="{{ old('offline_after_minutes', $settings['offline_after_minutes']) }}" required class="field-control">
+                        <p class="text-sm leading-6 text-slate-500">Minutes since the last imported camera email or event. Use 65 for cameras that email every hour.</p>
+                    </div>
+                    @error('offline_after_minutes') <p class="mt-2 text-sm text-red-600">{{ $message }}</p> @enderror
+                </div>
+
                 <div class="lg:col-span-2 grid gap-3 sm:grid-cols-3">
                     <label class="flex items-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
                         <input type="checkbox" name="validate_cert" value="1" @checked(old('validate_cert', $settings['validate_cert'])) class="h-4 w-4 rounded border-slate-300 text-brand-700">
@@ -120,8 +129,8 @@
             <section class="panel p-6">
                 <h2 class="text-xl font-bold text-slate-950">Camera sender format</h2>
                 <div class="mt-4 space-y-3 text-sm text-slate-600">
-                    <p class="rounded-lg bg-slate-50 px-4 py-4">The app matches the sender address before the @ symbol against the camera serial number.</p>
-                    <p class="rounded-lg bg-slate-50 px-4 py-4">Example: <span class="font-semibold text-slate-950">DS123456@example.com</span> matches serial <span class="font-semibold text-slate-950">DS123456</span>.</p>
+                    <p class="rounded-lg bg-slate-50 px-4 py-4">The app matches the camera serial from the email sender display name first, then falls back to the IPDOME S/N line in the email body.</p>
+                    <p class="rounded-lg bg-slate-50 px-4 py-4">Example: <span class="font-semibold text-slate-950">4G20260127CCWRS6GQ1948141</span> matches the camera serial saved in the app.</p>
                 </div>
             </section>
 

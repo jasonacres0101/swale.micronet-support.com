@@ -14,9 +14,10 @@ class CheckCameraStatus extends Command
 
     public function handle(): int
     {
-        $threshold = now()->subMinutes(5);
+        $offlineAfterMinutes = max(5, (int) config('camera_email.offline_after_minutes', 65));
+        $threshold = now()->subMinutes($offlineAfterMinutes);
 
-        Camera::query()->orderBy('id')->each(function (Camera $camera) use ($threshold): void {
+        Camera::query()->orderBy('id')->each(function (Camera $camera) use ($threshold, $offlineAfterMinutes): void {
             $newStatus = match (true) {
                 $camera->last_seen_at === null => 'unknown',
                 $camera->last_seen_at->greaterThan($threshold) => 'online',
@@ -37,8 +38,8 @@ class CheckCameraStatus extends Command
                 'old_status' => $oldStatus,
                 'new_status' => $newStatus,
                 'reason' => match ($newStatus) {
-                    'offline' => 'No Hikvision event received within 5 minutes',
-                    'unknown' => 'Camera has never reported a Hikvision event',
+                    'offline' => "No camera report received within {$offlineAfterMinutes} minutes",
+                    'unknown' => 'Camera has never reported a camera event',
                     default => 'Camera reported within status threshold',
                 },
                 'created_at' => now(),

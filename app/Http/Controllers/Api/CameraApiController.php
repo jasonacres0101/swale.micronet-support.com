@@ -55,4 +55,29 @@ class CameraApiController extends Controller
 
         return response()->json(CameraData::cameraPayload($camera, includeRawPayload: true));
     }
+
+    public function snapshots(Request $request, Camera $camera): JsonResponse
+    {
+        abort_unless($request->user(), 401);
+        abort_unless($request->user()->canViewCamera($camera), 403);
+
+        $snapshots = $camera->emailSnapshots()
+            ->latest('received_at')
+            ->latest('id')
+            ->take(6)
+            ->get()
+            ->map(fn ($snapshot): array => [
+                'id' => $snapshot->id,
+                'received_at' => optional($snapshot->received_at)->toIso8601String(),
+                'received_label' => optional($snapshot->received_at)->format('d M Y H:i') ?? 'Unknown time',
+                'subject' => $snapshot->subject ?: 'No subject',
+                'from_email' => $snapshot->from_email ?: 'Unknown sender',
+                'attachment_url' => $snapshot->attachmentUrl(),
+            ])
+            ->values();
+
+        return response()->json([
+            'snapshots' => $snapshots,
+        ]);
+    }
 }

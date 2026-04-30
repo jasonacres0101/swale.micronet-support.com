@@ -54,6 +54,7 @@ class SettingsController extends Controller
             'CAMERA_EMAIL_PASSWORD' => filled($validated['password'] ?? null) ? $validated['password'] : ($current['password'] ?? ''),
             'CAMERA_EMAIL_MARK_SEEN_AFTER_IMPORT' => $request->boolean('mark_seen_after_import') ? 'true' : 'false',
             'CAMERA_EMAIL_DELETE_AFTER_IMPORT' => $request->boolean('delete_after_import') ? 'true' : 'false',
+            'CAMERA_EMAIL_OFFLINE_AFTER_MINUTES' => (string) $validated['offline_after_minutes'],
         ]);
 
         Artisan::call('config:clear');
@@ -127,6 +128,7 @@ class SettingsController extends Controller
             'password' => $env['CAMERA_EMAIL_PASSWORD'] ?? config('camera_email.password'),
             'mark_seen_after_import' => filter_var($env['CAMERA_EMAIL_MARK_SEEN_AFTER_IMPORT'] ?? config('camera_email.mark_seen_after_import', true), FILTER_VALIDATE_BOOLEAN),
             'delete_after_import' => filter_var($env['CAMERA_EMAIL_DELETE_AFTER_IMPORT'] ?? config('camera_email.delete_after_import', false), FILTER_VALIDATE_BOOLEAN),
+            'offline_after_minutes' => (int) ($env['CAMERA_EMAIL_OFFLINE_AFTER_MINUTES'] ?? config('camera_email.offline_after_minutes', 65)),
         ];
     }
 
@@ -144,6 +146,7 @@ class SettingsController extends Controller
             'password' => [$passwordRequired ? 'required' : 'nullable', 'string', 'max:255'],
             'mark_seen_after_import' => ['nullable', 'boolean'],
             'delete_after_import' => ['nullable', 'boolean'],
+            'offline_after_minutes' => ['required', 'integer', 'min:5', 'max:1440'],
         ]);
     }
 

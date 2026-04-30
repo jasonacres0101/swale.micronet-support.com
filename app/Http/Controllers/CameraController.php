@@ -53,6 +53,12 @@ class CameraController extends Controller
         $camera->loadMissing('latestHikvisionEvent', 'site.organisation', 'site.cameras', 'maintenanceTasks.assignedUser');
         abort_unless(request()->user()?->canViewCamera($camera), 403);
 
+        $latestEmailSnapshots = $camera->emailSnapshots()
+            ->latest('received_at')
+            ->latest('id')
+            ->take(6)
+            ->get();
+
         return view('cameras.show', [
             'camera' => $camera,
             'nearbyCameras' => $this->nearbyCameras($camera),
@@ -79,11 +85,8 @@ class CameraController extends Controller
                 ->latest('due_at')
                 ->take(5)
                 ->get(),
-            'latestEmailSnapshots' => $camera->emailSnapshots()
-                ->latest('received_at')
-                ->latest('id')
-                ->take(6)
-                ->get(),
+            'latestEmailSnapshots' => $latestEmailSnapshots,
+            'latestEmailSnapshot' => $latestEmailSnapshots->first(),
         ]);
     }
 

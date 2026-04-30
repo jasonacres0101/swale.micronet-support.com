@@ -677,7 +677,7 @@ class ExampleTest extends TestCase
             'web_ui_url' => 'http://10.0.0.30',
             'status' => 'online',
             'is_online' => true,
-            'last_seen_at' => now()->subMinutes(10),
+            'last_seen_at' => now()->subMinutes(70),
         ]);
 
         $unknownCamera = Camera::query()->create([

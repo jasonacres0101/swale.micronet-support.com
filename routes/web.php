@@ -52,6 +52,7 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/cameras/{camera}/live-status', [CameraLiveStatusController::class, 'show'])->name('api.cameras.live-status.show');
         Route::get('/cameras', [CameraApiController::class, 'index'])->name('api.cameras.index');
         Route::get('/cameras/{camera}', [CameraApiController::class, 'show'])->name('api.cameras.show');
+        Route::get('/cameras/{camera}/snapshots', [CameraApiController::class, 'snapshots'])->name('api.cameras.snapshots');
         Route::post('/maintenance/{task}/attachments', [MaintenanceController::class, 'upload'])->name('api.maintenance.attachments.store');
     });
     Route::get('/cameras', [CameraController::class, 'index'])->name('cameras.index');
