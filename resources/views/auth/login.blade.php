@@ -8,10 +8,6 @@
             </p>
         </div>
 
-        <div class="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-800">
-            Demo login: <span class="font-semibold">admin@micronet.local</span> / <span class="font-semibold">password</span>
-        </div>
-
         <form method="POST" action="{{ route('login.store') }}" class="space-y-4">
             @csrf
 
@@ -21,7 +17,7 @@
                     id="email"
                     name="email"
                     type="email"
-                    value="{{ old('email', 'admin@micronet.local') }}"
+                    value="{{ old('email') }}"
                     required
                     autofocus
                     class="field-control"
@@ -37,7 +33,6 @@
                     id="password"
                     name="password"
                     type="password"
-                    value="password"
                     required
                     class="field-control"
                 >
